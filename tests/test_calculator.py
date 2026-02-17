@@ -1,9 +1,13 @@
-""" tests/test_calculator.py """
+""" tests/test_calculator_coverage.py """
 import sys
 from io import StringIO
+from unittest.mock import patch
 from app.calculator import calculator
+from app.calculator.calculator import format_result, display_history, parse_number
+from app.calculation.calculation import AddCalculation
 
-# NOTE: This function was taken from https://github.com/kaw393939/module3_is601/blob/main/tests/test_calculator.py
+
+# NOTE: Reused helper pattern from test_calculator.py
 def run_calculator_with_input(monkeypatch, inputs):
     """
     Simulates user input and captures output from the calculator REPL.
@@ -79,7 +83,7 @@ def test_equals_no_result(monkeypatch):
 # --- clear ---
 
 def test_clear(monkeypatch):
-    """Test clear resets the result."""
+    """Test clear resets the result and history."""
     output = run_calculator_with_input(monkeypatch, ["3 + 3", "c", "=", "q"])
     assert "Cleared." in output
     assert "No result yet." in output
@@ -88,6 +92,11 @@ def test_clear_alias(monkeypatch):
     """Test 'clear' alias works the same as 'c'."""
     output = run_calculator_with_input(monkeypatch, ["3 + 3", "clear", "=", "q"])
     assert "Cleared." in output
+
+def test_clear_also_wipes_history(monkeypatch):
+    """Test that clear wipes history so subsequent history command shows empty."""
+    output = run_calculator_with_input(monkeypatch, ["3 + 3", "c", "history", "q"])
+    assert "No calculations in history yet." in output
 
 
 # --- help ---
@@ -139,7 +148,6 @@ def test_division_by_zero(monkeypatch):
 def test_invalid_number_in_expression():
     """Test that a non-numeric value in parse_number raises ValueError."""
     import pytest
-    from app.calculator import parse_number
     with pytest.raises(ValueError, match="Not a valid number"):
         parse_number("abc")
 
@@ -163,3 +171,151 @@ def test_keyboardinterrupt_exits(monkeypatch):
     calculator()
     sys.stdout = sys.__stdout__
     assert "Exiting" in captured_output.getvalue()
+
+
+# --- format_result ---
+
+def test_format_result_integer_float():
+    """Test that a float with no fractional part is rendered without '.0'."""
+    # Arrange & Act
+    result = format_result(4.0)
+
+    # Assert
+    assert result == "4"
+
+def test_format_result_non_integer_float():
+    """Test that a float with a fractional part is rendered as-is."""
+    # Arrange & Act
+    result = format_result(3.5)
+
+    # Assert
+    assert result == "3.5"
+
+def test_format_result_non_float_value():
+    """
+    Test the else branch of format_result where the value is not a float instance.
+    This covers the branch where isinstance(value, float) is False.
+    """
+    # Arrange & Act
+    result = format_result(7)  # plain int, not a float
+
+    # Assert
+    assert result == "7"
+
+
+# --- display_history ---
+
+def test_display_history_empty(capsys):
+    """Test that display_history prints the empty message when history is empty."""
+    # Arrange
+    history = []
+
+    # Act
+    display_history(history)
+
+    # Assert
+    captured = capsys.readouterr()
+    assert "No calculations in history yet." in captured.out
+
+def test_display_history_with_items(capsys):
+    """
+    Test that display_history prints each calculation when history contains entries.
+    This covers the populated history branch (print loop).
+    """
+    # Arrange: build a real Calculation object so __str__ works correctly
+    calc = AddCalculation(3.0, 4.0)
+    history = [calc]
+
+    # Act
+    display_history(history)
+
+    # Assert
+    captured = capsys.readouterr()
+    assert "Calculation History:" in captured.out
+    assert "1." in captured.out
+    assert "AddCalculation" in captured.out
+
+def test_display_history_multiple_items(capsys):
+    """Test that display_history numbers multiple entries correctly."""
+    # Arrange
+    history = [AddCalculation(1.0, 2.0), AddCalculation(3.0, 4.0)]
+
+    # Act
+    display_history(history)
+
+    # Assert
+    captured = capsys.readouterr()
+    assert "1." in captured.out
+    assert "2." in captured.out
+
+
+# --- history / hist commands in the REPL ---
+
+def test_history_command_empty(monkeypatch):
+    """Test 'history' command before any calculations shows empty message."""
+    output = run_calculator_with_input(monkeypatch, ["history", "q"])
+    assert "No calculations in history yet." in output
+
+def test_hist_alias_empty(monkeypatch):
+    """Test 'hist' alias shows empty history message."""
+    output = run_calculator_with_input(monkeypatch, ["hist", "q"])
+    assert "No calculations in history yet." in output
+
+def test_history_command_with_entries(monkeypatch):
+    """
+    Test 'history' after a calculation shows the recorded entry.
+    This covers the populated branch of display_history via the REPL path.
+    """
+    output = run_calculator_with_input(monkeypatch, ["3 + 4", "history", "q"])
+    assert "Calculation History:" in output
+    assert "1." in output
+
+def test_hist_alias_with_entries(monkeypatch):
+    """Test 'hist' alias shows history entries after a calculation."""
+    output = run_calculator_with_input(monkeypatch, ["2 * 5", "hist", "q"])
+    assert "Calculation History:" in output
+    assert "1." in output
+
+
+# --- Prompt with result ---
+
+def test_prompt_shows_result_after_calculation(monkeypatch):
+    """
+    Test that after a calculation the prompt includes the current result.
+    The bracketed prompt '[N] > ' is rendered on the second iteration of the
+    loop, so we capture what is passed to input() to verify.
+    """
+    # After '2 + 3' the result is 5; the next input() call receives the '[5] > ' prompt.
+    prompts = []
+    inputs = iter(["2 + 3", "q"])
+
+    def fake_input(prompt):
+        prompts.append(prompt)
+        return next(inputs)
+
+    monkeypatch.setattr('builtins.input', fake_input)
+    captured_output = StringIO()
+    sys.stdout = captured_output
+    calculator()
+    sys.stdout = sys.__stdout__
+
+    # The first prompt is '> ', the second (after the result is set) should contain '5'
+    assert len(prompts) == 2
+    assert "5" in prompts[1]
+
+
+# --- except ValueError in REPL ---
+
+def test_repl_catches_value_error_from_factory(monkeypatch):
+    """
+    Test that a ValueError raised by CalculationFactory is caught and printed.
+    We patch CalculationFactory.create_calculation to raise ValueError so the
+    except ValueError branch is executed.
+    """
+    with patch(
+        'app.calculator.calculator.CalculationFactory.create_calculation',
+        side_effect=ValueError("mocked factory error")
+    ):
+        output = run_calculator_with_input(monkeypatch, ["1 + 2", "q"])
+
+    assert "Error: mocked factory error" in output

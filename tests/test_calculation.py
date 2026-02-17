@@ -335,7 +335,6 @@ def test_factory_create_unsupported_calculation():
 def test_factory_register_calculation_duplicate():
     """
     Test that registering a calculation type that's already registered raises ValueError.
-
     This test verifies that attempting to register a calculation type that has already
     been registered with the factory results in a ValueError to prevent duplicate entries.
     """
@@ -346,7 +345,7 @@ def test_factory_register_calculation_duplicate():
             """
             AnotherAddCalculation attempts to register the 'add' calculation type again.
             """
-            def execute(self) -> float:
+            def execute(self) -> float:  # pragma: no cover
                 return operations.add(self.a, self.b)
 
     # Assert
