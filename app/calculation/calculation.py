@@ -1,5 +1,7 @@
 # calculator_calculations.py
 
+# NOTE: This file was taken from https://github.com/kaw393939/module4_is601/blob/main/app/calculation/__init__.py, with some tweaks
+
 # -----------------------------------------------------------------------------------
 # Import Statements
 # -----------------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 # tests/conftest.py
 
+# NOTE: This file was taken from https://github.com/kaw393939/module4_is601/blob/main/tests/conftest.py, with some tweaks
+
 import pytest
 from app.calculation.calculation import CalculationFactory
 from app.calculation.calculation import (

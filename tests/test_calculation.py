@@ -1,4 +1,5 @@
 # tests/test_calculations.py
+# NOTE: This file was taken from https://github.com/kaw393939/module4_is601/blob/main/tests/test_calculation.py, with some tweaks
 
 """
 Unit tests for the calculator_calculations module using pytest.
